@@ -18,58 +18,13 @@ var cookie_jar = request.jar(),
       jar: cookie_jar
     };
 
-/*
-function handleCategoryPage(err, response, body) {
-    if (err) {
-      console.log(err);
-      return;
-    }
+var jquery = require('fs').readFileSync("./jquery-1.9.1.js", "utf-8"),
+    jsdom = require('jsdom');
 
-    debugger;
-
-    // successfully logged in!
-    // now, lets get our balance!
-    var balanceInquiry = util._extend({}, base_options);
-    balanceInquiry.method           = "POST";
-    balanceInquiry.url             += '/balanceinquiry.do';
-    balanceInquiry.headers.origin   = "https://m.klikbca.com";
-    balanceInquiry.headers.referer  = "https://m.klikbca.com/accountstmt.do?value(actions)=menu";
-
-    request.post(balanceInquiry, function(err, balanceResponse, balanceBody) {
-      // yeehaw
-      debugger;
-
-      var jquery = require('fs').readFileSync("./jquery-1.9.1.js", "utf-8");
-      var jsdom = require('jsdom');
-
-      jsdom.env({
-        html    : balanceBody,
-        src     : [jquery],
-        done    : function(err, window){
-          debugger
-          var $     = window.jQuery;
-          var saldo = $("#pagebody table:nth-child(2)  td:nth-child(2)  tr:nth-child(2) td:nth-child(3) font > b").html();
-          console.log(saldo);
-      }});
-
-      // now lets logout
-      var logout = util._extend({}, base_options);
-      logout.method           = "GET";
-      logout.url             += '/authentication.do?value(actions)=logout';
-      logout.headers.origin   = "https://m.klikbca.com";
-      logout.headers.referer  = "https://m.klikbca.com/balanceinquiry.do";
-
-      request.post(logout, function(err, logoutResponse, logoutBody) {
-        if (err) {
-          console.log(err);
-          return;
-        }
-
-        // fin...
-      });
-    })
+function extractCategoryId(url) {
+  var match = url.match(/[1-9][0-9]$/);
+  return match && match.length && match[0] != undefined && parseInt(match[0]);
 }
-*/
 
 function getCategories() {
   // category_page is a duplicate of base_options
@@ -77,13 +32,30 @@ function getCategories() {
   category_page.url += '/category/index/promo';
 
   var promise = new RSVP.Promise(function(resolve, reject) {
-    var categories = [
-      {url: '/promo/index/16', title: 'Fashion'},
-      {url: '/promo/index/17', title: 'Groceries'},
-      {url: '/promo/index/18', title: 'Food and Beverage'}
-    ];
+    request.get(category_page, function(err, response, body) {
+      jsdom.env({
+        html: body,
+        src: [jquery],
+        done: function(err, window) {
+          var $ = window.jQuery,
+              $categoriesListItems = $("body > div.row > div.container > div > ul.menu > li"),
+              categories = [];
 
-    resolve(categories);
+          $categoriesListItems.each(function(){
+            var $anchor = $('a:first', this),
+                category = {
+                  'id': extractCategoryId($anchor.attr('href')),
+                  'url': $anchor.attr('href').replace(base_options.url, ''),
+                  'title': $anchor.html()
+                };
+
+            categories.push(category);
+          })
+
+          resolve(categories);
+        }
+      });
+    })
   });
 
   return promise;
