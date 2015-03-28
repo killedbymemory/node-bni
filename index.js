@@ -22,8 +22,8 @@ var jquery = require('fs').readFileSync("./jquery-1.9.1.js", "utf-8"),
     jsdom = require('jsdom');
 
 function extractCategoryId(url) {
-  var match = url.match(/[1-9][0-9]$/);
-  return match && match.length && match[0] != undefined && parseInt(match[0]);
+  var match = url.match(/\/([0-9]?[0-9]{1,})$/); // /01, /1, /015, 15, /123, etc
+  return match && match.length && match[1] != undefined && parseInt(match[1]);
 }
 
 function getCategories() {
@@ -61,19 +61,47 @@ function getCategories() {
   return promise;
 }
 
-function getCategoryItems(category) {
-  // console.log(category);
-  return new RSVP.Promise(function(resolve, reject) {
-    var categoryItems = [
-      {title: [category.title, "UGG Australia"].join(' '), description: "Fashionable luxury with UGG", validity: '2015-05-28', url: '/promo/view/16/670'},
-      {title: [category.title, "UGG Australia 2"].join(' '), description: "Not so fashionable luxury with UGG", validity: '2015-05-30', url: '/promo/view/16/671'},
-      {title: [category.title, "UGG Australia 3"].join(' '), description: "So-so fashionable luxury with UGG", validity: '2015-05-30', url: '/promo/view/16/673'}
-    ];
+function extractPromotionId(url) {
+  var match = url.match(/\/([0-9]?[0-9]{1,})$/);
+  return match && match.length && match[1] != undefined && parseInt(match[1]);
+}
 
-    category["items"] = categoryItems;
+function getPromotionsByCategory(category) {
+  var promise = new RSVP.Promise(function(resolve, reject) {
+    var category_promotions_page = util._extend({}, base_options);
+    category_promotions_page.url += category.url;
 
-    resolve(category);
+    request.get(category_promotions_page, function(err, response, body) {
+      jsdom.env({
+        html: body,
+        src: [jquery],
+        done: function(err, window) {
+          var $ = window.jQuery,
+              $promotionsListItems = $("ul#lists > li"),
+              promotions = [];
+
+          $promotionsListItems.each(function(){
+            var $anchor = $('a:first', this),
+                promotion = {
+                  'id': extractPromotionId($anchor.attr('href')),
+                  'url': $anchor.attr('href').replace(base_options.url, ''),
+                  'title': $('span.promo-title', $anchor).html(),
+                  'merchant_name': $('span.merchant-name', $anchor).html(),
+                  'valid_until': $('span.valid-until', $anchor).html().replace('valid until ', ''),
+                  'img': $('img:first', $anchor).attr('src'),
+                };
+
+            promotions.push(promotion);
+          })
+
+          category["promotions"] = promotions;
+          resolve(category);
+        }
+      });
+    })
   });
+
+  return promise;
 }
 
 function render(categories) {
@@ -85,17 +113,16 @@ function handleError() {
   console.log("error");
 }
 
-function getPromotions() {
+function getAllPromotions() {
   var promise = new RSVP.Promise(function(resolve, reject) {
-
     getCategories().then(function(categories) {
-      var categoriesItems = categories.map(function(category) {
-        return getCategoryItems(category);
+      var promotionPromises = categories.map(function(category) {
+        return getPromotionsByCategory(category);
       })
 
-      RSVP.all(categoriesItems)
-        .then(function(categoriesItems) {
-          resolve(categoriesItems);
+      RSVP.all(promotionPromises)
+        .then(function(categories) {
+          resolve(categories);
         })
         .catch(function() {
           console.log("RSVP.all.catch :(");
@@ -107,5 +134,11 @@ function getPromotions() {
   return promise;
 }
 
-// getPromotions().then(render);
-getCategories().then(render);
+// get categories only:
+// getCategories().then(render);
+
+// get all promotions by a category:
+// getPromotionsByCategory({id: 16, url: '/promo/index/16', title: 'Fashion'}).then(render);
+
+// get all promotions:
+getAllPromotions().then(render);
