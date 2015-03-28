@@ -1,6 +1,8 @@
 var util = require('util'),
     request = require('request'),
-    RSVP = require('rsvp');
+    jsdom = require('jsdom'),
+    RSVP = require('rsvp'),
+    jquery = require('fs').readFileSync("./jquery-1.9.1.js", "utf-8");
 
 var cookie_jar = request.jar(),
     base_options = {
@@ -17,9 +19,6 @@ var cookie_jar = request.jar(),
       // enable Cookie jar while having a reference to it
       jar: cookie_jar
     };
-
-var jquery = require('fs').readFileSync("./jquery-1.9.1.js", "utf-8"),
-    jsdom = require('jsdom');
 
 function extractCategoryId(url) {
   var match = url.match(/\/([0-9]?[0-9]{1,})$/); // /01, /1, /015, 15, /123, etc
